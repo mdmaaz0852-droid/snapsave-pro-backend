@@ -40,14 +40,13 @@ const app = express();
 
 // Security middleware
 app.use(helmet({
-    contentSecurityPolicy: false, // API-focused, disable CSP restrictions
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false
 }));
 
 // CORS - Configure for Android app access
 app.use(cors({
     origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, curl)
         if (!origin) return callback(null, true);
         
         if (CONFIG.ALLOWED_ORIGINS[0] === '*' || CONFIG.ALLOWED_ORIGINS.includes(origin)) {
@@ -59,7 +58,7 @@ app.use(cors({
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     credentials: true,
-    maxAge: 86400 // 24 hours
+    maxAge: 86400
 }));
 
 // Compression for faster responses
@@ -156,8 +155,6 @@ app.get('/', (req, res) => {
 /**
  * Video Analysis Endpoint
  * GET /analyze?url={VIDEO_URL}
- * 
- * Returns video metadata and available formats with direct download URLs
  */
 app.get('/analyze', async (req, res) => {
     const startTime = Date.now();
@@ -194,7 +191,6 @@ app.get('/analyze', async (req, res) => {
     try {
         // ─────────────────────────────────────────────────────────
         // EXECUTE YT-DLP
-        // Using -j flag to get JSON output without downloading
         // ─────────────────────────────────────────────────────────
 
         const ytDlpCommand = `yt-dlp -j --no-warnings --no-download "${url}"`;
@@ -221,20 +217,17 @@ app.get('/analyze', async (req, res) => {
 
         // ─────────────────────────────────────────────────────────
         // FORMAT PROCESSING
-        // Extract and filter high-quality formats
         // ─────────────────────────────────────────────────────────
 
         const processedFormats = processFormats(videoData.formats, url);
 
         // ─────────────────────────────────────────────────────────
         // BUILD RESPONSE
-        // Luxurious, clean JSON structure for Android app
         // ─────────────────────────────────────────────────────────
 
         const response = {
             success: true,
             data: {
-                // Video metadata
                 id: videoData.id,
                 title: videoData.title || 'Untitled',
                 description: videoData.description?.substring(0, 500) || null,
@@ -242,31 +235,25 @@ app.get('/analyze', async (req, res) => {
                 duration: formatDuration(videoData.duration),
                 duration_seconds: videoData.duration,
                 
-                // Uploader info
                 uploader: {
                     name: videoData.uploader || videoData.channel || 'Unknown',
                     url: videoData.uploader_url || null,
                     id: videoData.channel_id || null
                 },
                 
-                // Source info
                 source: {
                     platform: videoData.extractor?.replace('IE', '') || 'Unknown',
                     url: videoData.webpage_url || url,
                     original_url: url
                 },
                 
-                // Statistics
                 stats: {
                     views: videoData.view_count || null,
                     likes: videoData.like_count || null,
                     upload_date: videoData.upload_date || null
                 },
                 
-                // Available formats (the core feature)
                 formats: processedFormats,
-                
-                // Total available qualities
                 total_formats: processedFormats.length
             },
             meta: {
@@ -289,32 +276,21 @@ app.get('/analyze', async (req, res) => {
 // HELPER FUNCTIONS
 // ═════════════════════════════════════════════════════════════════
 
-/**
- * Process and filter video formats for optimal user experience
- * Returns sorted list: 4K -> 1080p -> 720p -> etc.
- */
 function processFormats(formats, originalUrl) {
     if (!Array.isArray(formats)) return [];
 
     const videoFormats = formats
         .filter(format => {
-            // Must have video
             if (format.vcodec === 'none' || !format.vcodec) return false;
-            
-            // Must have resolution info
             if (!format.resolution || format.resolution === 'audio only') return false;
-            
-            // Skip storyboards and thumbnails
             if (format.format_note?.includes('storyboard')) return false;
             
             return true;
         })
         .map(format => {
-            // Parse resolution
             const height = format.height || 0;
             const width = format.width || 0;
             
-            // Determine quality label
             let qualityLabel = format.quality_label || format.format_note || '';
             if (!qualityLabel && height) {
                 qualityLabel = height >= 2160 ? '4K' :
@@ -324,11 +300,9 @@ function processFormats(formats, originalUrl) {
                               height >= 480 ? '480p' : `${height}p`;
             }
 
-            // Calculate filesize
             const filesize = format.filesize || format.filesize_approx;
             const sizeFormatted = formatFileSize(filesize);
 
-            // Build direct download URL (via our /download endpoint)
             const downloadUrl = `/download?url=${encodeURIComponent(originalUrl)}&format=${format.format_id}`;
 
             return {
@@ -355,24 +329,19 @@ function processFormats(formats, originalUrl) {
                     direct: downloadUrl,
                     manifest: format.manifest_url || null
                 },
-                // Premium flag for 4K/2K content
                 is_premium: height >= 1440
             };
         })
-        // Remove duplicates by resolution
         .filter((format, index, self) => 
             index === self.findIndex(f => f.quality.height === format.quality.height)
         )
-        // Sort by quality (highest first)
         .sort((a, b) => b.quality.height - a.quality.height)
-        // Limit to top 8 formats for performance
         .slice(0, 8);
 
-    // Add audio-only option if available
     const audioFormat = formats.find(f => 
         f.acodec !== 'none' && 
         f.vcodec === 'none' &&
-        f.abr // audio bitrate
+        f.abr
     );
 
     if (audioFormat) {
@@ -407,9 +376,6 @@ function processFormats(formats, originalUrl) {
     return videoFormats;
 }
 
-/**
- * Format seconds into HH:MM:SS or MM:SS
- */
 function formatDuration(seconds) {
     if (!seconds || isNaN(seconds)) return null;
     
@@ -423,9 +389,6 @@ function formatDuration(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-/**
- * Format bytes to human-readable size
- */
 function formatFileSize(bytes) {
     if (!bytes || isNaN(bytes)) return 'Unknown';
     
@@ -441,9 +404,6 @@ function formatFileSize(bytes) {
     return `${size.toFixed(1)} ${units[unitIndex]}`;
 }
 
-/**
- * Centralized error handling
- */
 function handleError(error, res, url) {
     console.error(`[ERROR] URL: ${url} | Message: ${error.message}`);
     
@@ -451,7 +411,6 @@ function handleError(error, res, url) {
     let errorMessage = 'Internal server error';
     let errorCode = 'UNKNOWN_ERROR';
 
-    // yt-dlp specific errors
     if (error.message.includes('Unsupported URL')) {
         statusCode = 400;
         errorMessage = 'This URL is not supported. Try YouTube, Instagram, TikTok, Facebook, Twitter, etc.';
@@ -490,7 +449,6 @@ function handleError(error, res, url) {
 // ERROR HANDLING MIDDLEWARE
 // ═════════════════════════════════════════════════════════════════
 
-// 404 Handler
 app.use((req, res) => {
     res.status(404).json({
         success: false,
@@ -499,7 +457,6 @@ app.use((req, res) => {
     });
 });
 
-// Global Error Handler
 app.use((err, req, res, next) => {
     console.error('[GLOBAL ERROR]', err);
     res.status(500).json({
@@ -522,7 +479,6 @@ app.listen(CONFIG.PORT, '0.0.0.0', () => {
 ║   Status:      🟢  ONLINE                                        ║
 ║   Port:        ${CONFIG.PORT}                                          ║
 ║   Environment: ${CONFIG.NODE_ENV}                                  ║
-║   yt-dlp:      $(yt-dlp --version 2>/dev/null || echo 'checking...')                    ║
 ║                                                                  ║
 ║   Endpoints:                                                     ║
 ║   • GET /health      → Health check                             ║
@@ -542,4 +498,4 @@ process.on('SIGINT', () => {
     console.log('[SHUTDOWN] SIGINT received. Closing server gracefully...');
     process.exit(0);
 });
-
+        
