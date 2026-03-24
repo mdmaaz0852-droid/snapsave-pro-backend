@@ -53,8 +53,8 @@ RUN echo "=== Verifying installations ===" \
 # Copy package files first (leverage Docker cache)
 COPY package*.json ./
 
-# Install Node.js dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install Node.js dependencies (FIXED: use npm install instead of npm ci)
+RUN npm install --production && npm cache clean --force
 
 # Copy application source
 COPY . .
@@ -82,4 +82,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Start the application
 CMD ["node", "index.js"]
-
