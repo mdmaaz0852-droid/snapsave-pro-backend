@@ -1,60 +1,21 @@
 # ═════════════════════════════════════════════════════════════════
 # SnapSave Pro Backend - Render.com Blueprint
-# Infrastructure as Code for automated deployment
 # ═════════════════════════════════════════════════════════════════
 
 services:
-  # Main Web Service
   - type: web
-    name: snapsave-pro-api
+    name: snapsave-pro-backend
     runtime: docker
     repo: https://github.com/YOUR_USERNAME/snapsave-pro-backend
     branch: main
-    plan: standard  # Options: free, starter, standard, pro
+    plan: free
     
-    # Health check configuration
-    healthCheckPath: /health
-    healthCheckTimeout: 10
-    
-    # Environment variables
     envVars:
       - key: NODE_ENV
         value: production
-      
       - key: PORT
         value: 10000
-      
-      # Optional: Restrict CORS to your Android app
-      # - key: ALLOWED_ORIGINS
-      #   value: https://yourapp.com,https://*.onrender.com
-      
-      # Optional: API key for authentication
-      # - key: API_KEY
-      #   generateValue: true  # Auto-generate secure key
-
-    # Auto-deploy on git push
+    
+    healthCheckPath: /health
     autoDeploy: true
-
-    # Scaling (for paid plans)
-    scaling:
-      minInstances: 1
-      maxInstances: 3
-      targetCPUPercent: 80
-      targetMemoryPercent: 80
-
-# Optional: Environment group for shared variables
-# envVarGroups:
-#   - name: snapsave-secrets
-#     envVars:
-#       - key: API_KEY
-#         sync: false  # Manual entry in dashboard
-
-# Optional: Cron job for cleanup (if using disk)
-# jobs:
-#   - name: cleanup-downloads
-#     type: cron
-#     schedule: "0 */6 * * *"  # Every 6 hours
-#     runtime: docker
-#     repo: https://github.com/YOUR_USERNAME/snapsave-pro-backend
-#     dockerCommand: node cleanup.js
-
+    
